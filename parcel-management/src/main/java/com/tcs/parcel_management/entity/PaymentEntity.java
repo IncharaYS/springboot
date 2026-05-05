@@ -25,7 +25,7 @@ public class PaymentEntity extends BaseEntity {
     private String transactionId;
 
     @OneToOne
-    @JoinColumn(name = "booking_fk", nullable = false)
+    @JoinColumn(name = "booking_fk", nullable = false, unique = true)
     private BookingEntity booking;
 
     @Column(nullable = false)

@@ -46,9 +46,11 @@ public class BookingEntity extends BaseEntity {
     private String parcelContents;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private DeliveryType deliveryType;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private PackingPreference packingPreference;
 
     private LocalDateTime pickupTime;
@@ -59,6 +61,7 @@ public class BookingEntity extends BaseEntity {
     private BigDecimal serviceCost;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private BookingStatus status;
 
     @Column(nullable = false)
@@ -66,4 +69,6 @@ public class BookingEntity extends BaseEntity {
 
     @Column(nullable = false)
     private LocalDateTime bookingDate;
+
+
 }

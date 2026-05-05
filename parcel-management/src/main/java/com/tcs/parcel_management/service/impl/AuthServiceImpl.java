@@ -9,8 +9,10 @@ import com.tcs.parcel_management.exception.BusinessValidationException;
 import com.tcs.parcel_management.exception.DuplicateResourceException;
 import com.tcs.parcel_management.exception.InvalidCredentialsException;
 import com.tcs.parcel_management.repository.UserRepository;
+import com.tcs.parcel_management.security.JwtUtil;
 import com.tcs.parcel_management.service.AuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -18,6 +20,11 @@ import org.springframework.stereotype.Service;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+
+    private final PasswordEncoder passwordEncoder;
+
+
+    private final JwtUtil jwtUtil;
 
     @Override
     public AuthResponseDTO register(RegisterRequestDTO request) {
@@ -43,7 +50,7 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(request.getEmail());
         user.setPhone(request.getPhone());
         user.setAddress(request.getAddress());
-        user.setPassword(request.getPassword()); // Will encode later
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(Role.CUSTOMER);
         user.setActive(true);
 
@@ -62,7 +69,7 @@ public class AuthServiceImpl implements AuthService {
         UserEntity user = userRepository.findByEmail(request.getEmail()).orElseThrow(() ->
                         new InvalidCredentialsException("Invalid email or password"));
 
-        if (!user.getPassword().equals(request.getPassword())) {
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
@@ -70,10 +77,15 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessValidationException("Account is inactive");
         }
 
+        String token = jwtUtil.generateToken(user.getEmail());
+
         return new AuthResponseDTO(
-                null,
+                token,
                 user.getRole().name(),
                 "Login successful"
         );
     }
+
+
+
 }
