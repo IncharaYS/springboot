@@ -12,6 +12,10 @@ import com.tcs.parcel_management.repository.FeedbackRepository;
 import com.tcs.parcel_management.repository.UserRepository;
 import com.tcs.parcel_management.service.BookingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -31,27 +35,47 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public BookingResponseDTO createBooking(BookingRequestDTO request) {
 
-
         String email = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
 
-        UserEntity customer = userRepository.findByEmail(email)
+        UserEntity loggedInUser = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Customer not found"));
+                        new ResourceNotFoundException("User not found"));
 
-        if (customer.getRole() != Role.CUSTOMER) {
-            throw new BusinessValidationException("Only customers can create bookings");
+        UserEntity bookingCustomer;
+
+        if (loggedInUser.getRole() == Role.ADMIN) {
+
+            if (request.getCustomerId() == null) {
+                throw new BusinessValidationException(
+                        "Customer ID is required for admin booking");
+            }
+
+            bookingCustomer = userRepository.findByCustomerId(request.getCustomerId())
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException("Customer not found"));
+
+        } else {
+            bookingCustomer = loggedInUser;
         }
+
+        if (request.getDropoffTime().isBefore(request.getPickupTime())) {
+            throw new BusinessValidationException(
+                    "Dropoff time cannot be before pickup time");
+        }
+
+        BigDecimal serviceCost = calculateServiceCost(
+                request,
+                loggedInUser.getRole() == Role.ADMIN
+        );
+
 
         String bookingId = generateBookingId();
 
-        BigDecimal serviceCost = calculateServiceCost(request);
-
         BookingEntity booking = new BookingEntity();
         booking.setBookingId(bookingId);
-        booking.setCustomer(customer);
-        booking.setBookingDate(LocalDateTime.now());
+        booking.setCustomer(bookingCustomer);
         booking.setReceiverName(request.getReceiverName());
         booking.setReceiverAddress(request.getReceiverAddress());
         booking.setReceiverPin(request.getReceiverPin());
@@ -64,12 +88,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setDropoffTime(request.getDropoffTime());
         booking.setServiceCost(serviceCost);
         booking.setStatus(BookingStatus.BOOKED);
-        booking.setBookedByAdmin(false);
-
-        if (request.getDropoffTime().isBefore(request.getPickupTime())) {
-            throw new BusinessValidationException(
-                    "Dropoff time cannot be before pickup time");
-        }
+        booking.setBookedByAdmin(loggedInUser.getRole() == Role.ADMIN);
+        booking.setBookingDate(LocalDateTime.now());
 
         bookingRepository.save(booking);
 
@@ -86,20 +106,36 @@ public class BookingServiceImpl implements BookingService {
         return "BID" + (5001 + count);
     }
 
-    private BigDecimal calculateServiceCost(BookingRequestDTO request) {
+    private BigDecimal calculateServiceCost(BookingRequestDTO request, boolean isAdminBooking) {
 
-        BigDecimal cost = BigDecimal.valueOf(request.getParcelWeight() * 50);
+        BigDecimal baseRate = BigDecimal.valueOf(50);
 
-        switch (request.getDeliveryType()) {
-            case EXPRESS -> cost = cost.add(BigDecimal.valueOf(100));
-            case SAME_DAY -> cost = cost.add(BigDecimal.valueOf(200));
-        }
+        BigDecimal weightCharge = BigDecimal.valueOf(
+                request.getParcelWeight() * 0.02
+        );
 
-        switch (request.getPackingPreference()) {
-            case PREMIUM -> cost = cost.add(BigDecimal.valueOf(75));
-        }
+        BigDecimal deliveryCharge = switch (request.getDeliveryType()) {
+            case STANDARD -> BigDecimal.valueOf(30);
+            case EXPRESS -> BigDecimal.valueOf(80);
+            case SAME_DAY -> BigDecimal.valueOf(150);
+        };
 
-        return cost;
+        BigDecimal packingCharge = switch (request.getPackingPreference()) {
+            case BASIC -> BigDecimal.valueOf(10);
+            case PREMIUM -> BigDecimal.valueOf(30);
+        };
+
+        BigDecimal adminFee = isAdminBooking
+                ? BigDecimal.valueOf(50)
+                : BigDecimal.ZERO;
+
+        BigDecimal subtotal = baseRate
+                .add(weightCharge)
+                .add(deliveryCharge)
+                .add(packingCharge)
+                .add(adminFee);
+
+        return subtotal.multiply(BigDecimal.valueOf(1.05));
     }
 
 
@@ -129,8 +165,7 @@ public class BookingServiceImpl implements BookingService {
                 .getAuthentication()
                 .getName();
 
-        return bookingRepository
-                .findByCustomerEmailOrderByBookingDateDesc(email)
+        return bookingRepository.findByCustomerEmailOrderByBookingDateDesc(email)
                 .stream()
                 .map(booking -> new BookingSummaryDTO(
                         booking.getBookingId(),
@@ -141,6 +176,46 @@ public class BookingServiceImpl implements BookingService {
                 ))
                 .toList();
     }
+
+    @Override
+    public Page<BookingSummaryDTO> getAllBookingsPaginated(int page, int size) {
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by("bookingDate").descending()
+        );
+
+        return bookingRepository.findAllByOrderByBookingDateDesc(pageable)
+                .map(booking -> new BookingSummaryDTO(
+                        booking.getBookingId(),
+                        booking.getCustomer().getName(),
+                        booking.getReceiverName(),
+                        booking.getStatus(),
+                        booking.getServiceCost()
+                ));
+    }
+
+
+    @Override
+    public void updatePickupDrop(PickupDropUpdateDTO request) {
+
+        BookingEntity booking = bookingRepository.findByBookingId(request.getBookingId())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Booking not found"));
+
+        if (request.getDropoffTime().isBefore(request.getPickupTime())) {
+            throw new BusinessValidationException(
+                    "Dropoff time cannot be before pickup time");
+        }
+
+        booking.setPickupTime(request.getPickupTime());
+        booking.setDropoffTime(request.getDropoffTime());
+
+        bookingRepository.save(booking);
+    }
+
+
 
     @Override
     public void updateBookingStatus(BookingStatusUpdateDTO request) {
@@ -178,14 +253,39 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Booking not found"));
 
-        if (booking.getStatus() != BookingStatus.BOOKED) {
+        if (booking.getStatus() == BookingStatus.DELIVERED ||
+                booking.getStatus() == BookingStatus.IN_TRANSIT) {
+
             throw new BusinessValidationException(
-                    "Booking can only be cancelled before shipment");
+                    "Cannot cancel booking after parcel is in transit/delivered");
+        }
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new BusinessValidationException(
+                    "Booking already cancelled");
         }
 
         booking.setStatus(BookingStatus.CANCELLED);
 
         bookingRepository.save(booking);
+    }
+
+    @Override
+    public List<BookingSummaryDTO> filterBookings(BookingFilterDTO request) {
+
+        return bookingRepository.filterBookings(
+                        request.getBookingId(),
+                        request.getCustomerId(),
+                        request.getStatus()
+                ).stream()
+                .map(booking -> new BookingSummaryDTO(
+                        booking.getBookingId(),
+                        booking.getCustomer().getName(),
+                        booking.getReceiverName(),
+                        booking.getStatus(),
+                        booking.getServiceCost()
+                ))
+                .toList();
     }
 
 

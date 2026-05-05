@@ -18,4 +18,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     @Query("SELECT MAX(u.customerId) FROM UserEntity u")
     Integer findMaxCustomerId();
+
+    Optional<UserEntity> findByCustomerId(Integer customerId);
 }

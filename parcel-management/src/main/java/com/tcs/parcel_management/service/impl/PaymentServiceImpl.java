@@ -15,6 +15,7 @@ import com.tcs.parcel_management.repository.PaymentRepository;
 import com.tcs.parcel_management.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import java.time.YearMonth;
 
 import java.time.LocalDateTime;
 
@@ -60,6 +61,17 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (!card.getCardHolderName().equalsIgnoreCase(request.getCardHolderName())) {
             throw new BusinessValidationException("Card holder name mismatch");
+        }
+
+
+        YearMonth current = YearMonth.now();
+        YearMonth cardExpiry = YearMonth.of(
+                request.getExpiryYear(),
+                request.getExpiryMonth()
+        );
+
+        if (cardExpiry.isBefore(current)) {
+            throw new BusinessValidationException("Card has expired");
         }
 
         String paymentId = generatePaymentId();

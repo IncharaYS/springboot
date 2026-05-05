@@ -4,6 +4,7 @@ import com.tcs.parcel_management.dto.*;
 import com.tcs.parcel_management.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,14 +17,27 @@ public class BookingController {
 
     private final BookingService bookingService;
 
-    @PostMapping
-    public ResponseEntity<BookingResponseDTO> createBooking(
-            @Valid @RequestBody BookingRequestDTO request) {
+
+
+    @GetMapping("/paged")
+    public ResponseEntity<Page<BookingSummaryDTO>> getAllBookingsPaginated(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
 
         return ResponseEntity.ok(
-                bookingService.createBooking(request)
+                bookingService.getAllBookingsPaginated(page, size)
         );
     }
+
+    @PutMapping("/pickup-drop")
+    public ResponseEntity<String> updatePickupDrop(
+            @Valid @RequestBody PickupDropUpdateDTO request) {
+
+        bookingService.updatePickupDrop(request);
+
+        return ResponseEntity.ok("Pickup and drop time updated successfully");
+    }
+
 
 
     @GetMapping("/my")
@@ -69,5 +83,26 @@ public class BookingController {
         bookingService.cancelBooking(bookingId);
 
         return ResponseEntity.ok("Booking cancelled successfully");
+    }
+
+
+
+
+    @PostMapping
+    public ResponseEntity<BookingResponseDTO> createBooking(
+            @Valid @RequestBody BookingRequestDTO request) {
+
+        return ResponseEntity.ok(
+                bookingService.createBooking(request)
+        );
+    }
+
+    @PostMapping("/filter")
+    public ResponseEntity<List<BookingSummaryDTO>> filterBookings(
+            @RequestBody BookingFilterDTO request) {
+
+        return ResponseEntity.ok(
+                bookingService.filterBookings(request)
+        );
     }
 }

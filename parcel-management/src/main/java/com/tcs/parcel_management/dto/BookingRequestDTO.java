@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 @Setter
 public class BookingRequestDTO {
 
+    private Integer customerId;
+
     @NotBlank(message = "Receiver name is required")
     private String receiverName;
 
@@ -28,7 +30,6 @@ public class BookingRequestDTO {
 
     @NotNull(message = "Parcel weight is required")
     @Positive(message = "Parcel weight must be positive")
-    @DecimalMax(value = "100.0", message = "Parcel weight too large")
     private Double parcelWeight;
 
     @NotBlank(message = "Parcel contents are required")

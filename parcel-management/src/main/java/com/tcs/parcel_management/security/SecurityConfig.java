@@ -41,6 +41,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/feedback")
                         .hasRole("ADMIN")
 
+                        .requestMatchers(HttpMethod.PUT, "/api/bookings/pickup-drop")
+                        .hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/paged")
+                        .hasRole("ADMIN")
+
                         .anyRequest().authenticated()
                 )
 
